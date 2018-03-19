@@ -4,19 +4,13 @@ import serial
 import datetime as dt
 import ephem
 
-######To Do######
-# Check full movement cycle
-# Determine error in move function
-# Upload to Bitbucket
-# User manual
-# Look into Work study at U of T (CLN), SURF, Datakind
 
-class Dome:
+class Dome: #Class written by Jonathan Franklin
     '''This is the virtual representation of the robodome,
     connecting the python program to the electronics.'''
 
     def __init__(self):
-        self.tty=serial.Serial('COM3', 9600, timeout=2)
+        self.tty=serial.Serial('COM3', 9600, timeout=2) #CHANGE COM3 to serial port being used
         self.shutter = 'Unknown'
         self.az = 'Unknown'
 
@@ -67,7 +61,7 @@ class Dome:
 
 
 
-def parseinfo(message):
+def parseinfo(message): # function written by Jonathan Franklin - how program interprets messages from dome
     text = message.split(',')
     dome.az = round(359. * float(text[4]) / float(text[1]),1)
     temp = int(text[6])
@@ -79,7 +73,7 @@ def parseinfo(message):
         dome.shutter = 'Unknown'
     print 'Current Dome Status:\n\tShutter: {0}\n\tAzimuth: {1}'.format(dome.shutter, dome.az)
 
-def move(position):#check if in position multiple times maybe
+def move(position): # tells dome to move to specific position
 	hundreds = int(position/100)
 	tens = (int((position-100*hundreds)/10))
 	ones = int(position-100*hundreds-10*tens)
@@ -87,7 +81,7 @@ def move(position):#check if in position multiple times maybe
 	dome.write_command(location) 
 	return
 	
-def weatherTimeAccurate(vaisalaTime):
+def weatherTimeAccurate(vaisalaTime): #makes sure that the dome is reading time-accurate data
 	return True #remove when doing real-time
 	'''dTime = dt.datetime.utcnow()
 	dTime = dTime.strftime("%H:%M:%S")
@@ -100,125 +94,144 @@ def weatherTimeAccurate(vaisalaTime):
 		return True'''
 	
 	
-def goodWeather():
-	return True #for testing
-	'''print "\nChecking weather..."
+def goodWeather(): #checks if weather meets good conditions
+	print "\nChecking weather..."
 	file = open("vaisalaData.txt", "r")
 	line_list = file.readlines()
 	last_line = line_list[-1]
 	file.close()
 	lineArr = last_line.split(",")
+	print last_line
 	if weatherTimeAccurate(lineArr[1]) == False:
 		print "\nVaisala Time error, offset by more than 5 minutes"
 		print "\nPlease check the Vaisala Reader"
 		return False
-	elif float(lineArr[6]) >=10: #arr[6]=wsavg, 7=wsmax, 9=RH, 13=rainintensity 
+	elif float(lineArr[3]) >=10: #arr[3]=wsavg, ?=wsmax, 5=RH, 8=rainintensity 
 		print "\nAverage windspeed too high"
 		return False
-	elif float(lineArr[7]) >=15:
-		print "\nMax windpeed too high"
-		return False
-	elif float(lineArr[9]) >=90:
+	elif float(lineArr[5]) >=70:
 		print "\nMax humidity too high"
 		return False
-	elif float(lineArr[13]) >0:
+	elif float(lineArr[8]) >0:
 		print "\nRain Detected"
 		return False
 	else:
-		return True'''
+		print 'Weather is fine'
+		return True
 
-
-def positionAccurate(azimuth):
+def positionAccurate(azimuth): #checks if dome position is accurate. If lagging by 15 degrees or more, return False
 	print "\nChecking position..."
 	print "\nSun Position %s" %(57.2958*float(azimuth))
 	print "\nDome Position %s" %(dome.az)
 	
-	if abs(57.2958*float(azimuth) - float(dome.az))>2: #change back to 10
+	if abs(57.2958*float(azimuth) - float(dome.az))>15: 
 		return False
 	else:
+		print 'Position is fine'
 		return True
 
 		
-def checkMovement(position):
+def checkMovement(position): #tells dome to move to position 5 degrees ahead of actual position multiple times
+#prevent dome from missing messages
 	count = 0;
-	while positionAccurate(position)==False and count <=5:
-		move(position)
+	dome.write_command('GINF')
+	result,message = dome.readfrom()
+	if result == 0:
+		print '\tNO RESPONSE...'
+	else:
+		#print message
+		parseinfo(message)
+	while positionAccurate(str(position))==False and count <=5:
+		move(57.2958*position + 5)
 		sleep(10)
+		dome.write_command('GINF')
+		result,message = dome.readfrom()
+		if result == 0:
+			print '\tNO RESPONSE...'
+		else:
+			#print message
+			parseinfo(message)
+		count +=1
+		if count == 5:
+			print 'dome didnt listen'
+			
 	
-def automate():
+def automate(): #main function for automation
+	#initialize ephemeris 
 	pos = ephem.city("Toronto")#need to enter exact coordinates
 	sun = ephem.Sun()
-	timer = 0
 
 	try:
-		sun.compute(pos)
-		if dome.shutter == 'Unknown':
+		#dome initialization
+		sun.compute(pos) #get data on sun
+		if dome.shutter == 'Unknown': #send dome to starting position if shutter is unknown
 			dome.write_command('GHOM')
 			sleep(30)
 			dome.write_command('GCLS')
 			sleep(30)
-		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0:
+		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0: #send Dome to sun position if weather permits and daytime
+			dome.write_command('GHOM')
+			sleep(30)
 			dome.write_command("GOPN")
 			sleep(30) 
-			move(sun.az)
+			move(57.2958*float(sun.az) + 5)
 			sleep(30)
-			timer +=1
-		while True:
-			print "\nAutomation has been running for approximately %d minutes" %(timer)
+		
+		while True: #looping program
 			pos.date = ephem.now()
 
 			sun.compute(pos)
-			dome.write_command('GINF')
+			dome.write_command('GINF') 
 			result,message = dome.readfrom()
-			if result == 1:
+			if result == 1: #check dome info
 				parseinfo(message)
 			else:
 				print '\t Contact Failed.  Dome status unknown.'
 			if dome.shutter == 'Opened':
-				if sun.alt <0:
+				if sun.alt <0: #closing for night time
+					dome.write_command('GHOM')
+					sleep(30)
 					dome.write_command('GCLS')
 					for i in range(60):
 						sleep(1)
 					print "\nNight time -- Dome closed"
-				elif goodWeather() == False:
+				elif goodWeather() == False: #closing for bad weather
+					dome.write_command('GHOM')
+					sleep(30)
 					dome.write_command('GCLS')
-					sleep(30)
+					sleep(60)
 					print "\nPoor weather conditions detected -- Dome closed"
-				elif timer%5==0 and positionAccurate(sun.az) == False and goodWeather()==True: 
-					move(57.2958*float(sun.az))
-					sleep(30)
-					print "dome moved"
-				for i in range(60):
+				elif positionAccurate(sun.az) == False and goodWeather()==True: 
+					checkMovement(float(sun.az)) #move to track sun
+				for i in range(10): #wait 10 seconds
 					sleep(1) #enables keyboardinterrupt to be processed right away
-				timer += 1
 				
 			else:
-				if goodWeather() == True  and sun.alt>0: #separate bad weather/night
+				if goodWeather() == True  and sun.alt>0: #opens dome again if conditions allow it
+					dome.write_command('GHOM')
+					sleep(30)
 					dome.write_command("GOPN")
 					for i in range(30):
 						sleep(1)
-					move(sun.az)
+					move(57.2958*float(sun.az) + 5)
 					sleep(30)
-					timer+=1
-				else:
-					timer += 10
-					for i in range(600):
+				else: #waiting in bad conditions
+					for i in range(60):
 						sleep(1)
 			
 			
 			
 		
-	except KeyboardInterrupt:
+	except KeyboardInterrupt: #allows user to exit infinite loop by pressing ctrl-c
 		print "\nKeyboardInterrupt -- exiting automation"
-		print "\nAutomation has terminated at approximately %d minutes" %(timer)
 		return
-	
 
-if __name__ == '__main__':
-	
-	dome = Dome() 
+
+if __name__ == '__main__': #written by Jonathan Franklin
+
+	dome = Dome()
 	leave_loop = False
-	print '\n\nrobodome_comm_v2.py\n----'
+	print '\n\nrobodomev1.py\n----'
 
     ## Clear Serial Line
 	dome.tty.read(dome.tty.inWaiting())
@@ -239,7 +252,7 @@ if __name__ == '__main__':
 			command = raw_input('\nWhat next? (q to quit): ')
 			if  command in ['q','Q']:
 				leave_loop = True
-			elif command in ['a','A']:
+			elif command in ['a','A']: #enables automation
 				automate()
 			else:
 				dome.write_command(command)
