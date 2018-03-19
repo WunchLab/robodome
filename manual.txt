@@ -1,0 +1,60 @@
+ROBO-DOME AUTOMATION MANUAL
+---------------------------------------------------------------------------------------------------
+George Lu 2018
+Last updated on 22 Jan 2018
+
+Based off robodome_comm program last updated by Jonathan Franklin on 19 Feb 2014
+---------------------------------------------------------------------------------------------------
+TABLE OF CONTENTS
+1. Overall Purpose
+2. Requirements and Setup
+3. Operation
+4. Errors
+---------------------------------------------------------------------------------------------------
+1. OVERALL PURPOSE
+This program serves to automate a ROBO-DOME™ Observatory to protect instruments from poor weather
+conditions. Currently, it roughly tracks the position of the sun to within 7 degrees of accuracy (although a quick change to the ephemeris
+variable can allow the rough tracking of any object), opens/closes at sunrise/sunset, and closes
+when poor weather conditions are detected. Currently, these conditions are:
+	a. Average wind speeds over 10m/s OR
+	b. A sudden gust of wind over 15m/s OR
+	c. A relative humidity over 90% OR
+	d. The detection of any rain.
+The automation process can also be interrupted to input manual commands
+---------------------------------------------------------------------------------------------------
+2. REQUIREMENTS AND SETUP
+	2.1 Computer Requirements
+	This version requires a computer that runs ________. Additionally, the computer must run Python
+	_____ or later. 
+	
+	2.2 Additional files
+	For the program to run it needs the following modules downloaded:
+		-Pyserial https://pypi.python.org/pypi/pyserial
+		-Pyephem https://pypi.python.org/pypi/pyephem/
+	It also needs the following files in the same directory:
+		-vaisalaData.txt (this is a blank file) (SAME FILE THAT VAISALA WRITES TO)
+		-exampleData.txt (this is for testing without a Vaisala sensor)
+	Finally, it also needs the Vaisala data reader vaisala_read.py to be in the same directory
+	
+	2.3 Changes to the program files
+	To set-up the right serial port, go to line __ and change "COM3" to the serial port that 
+	connects the ROBO-DOME™ to the operating computer. Additionally, go to line _____ to enter the 
+	observer's longitude, latitude, and elevation.
+	
+	2.4 Setting up the ROBO-DOME
+	Ensure that the DDW switch inside the control box is set to REMOTE. Connect the PC cable to the
+	computer.
+---------------------------------------------------------------------------------------------------
+3. OPERATION
+	A step by step procedure to operate the program is as follows:
+	1. Open Command Prompt and change the directory (cd) to the folder that contains this program 
+	and the vaisala_read.py program
+	2. Enter the command: python vaisala_read.py (LOOK INTO HOW THIS PROGRAM WORKS)
+	3. Enter "python robodomeV1.py"
+	4. Assuming the dome is connected, you will be given a prompt to enter a command, looking like:
+	"What next? (q to quit):". Here, you can manually send commands to the dome.
+	5. To automate, type "a" or "A". 
+	6. To exit the automation, hit ctrl-c to be taken back to the main prompt. To quit, hit q.
+---------------------------------------------------------------------------------------------------
+4. COMMON ERROR MESSAGES
+
