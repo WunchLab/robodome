@@ -10,7 +10,7 @@ class Dome: #Class written by Jonathan Franklin
     connecting the python program to the electronics.'''
 
     def __init__(self):
-        self.tty=serial.Serial('COM27', 9600, timeout=2) #CHANGE COM3 to serial port being used
+        self.tty=serial.Serial('COM33', 9600, timeout=2) #CHANGE COM3 to serial port being used
         self.shutter = 'Unknown'
         self.az = 'Unknown'
 
@@ -81,9 +81,9 @@ def move(position): # tells dome to move to specific position
 	dome.write_command(location) 
 	return
 	
-def weatherTimeAccurate(vaisalaTime): #makes sure that the dome is reading time-accurate data
-	return True #remove when doing real-time
-	'''dTime = dt.datetime.utcnow()
+def weatherTimeAccurate(vTime): #makes sure that the dome is reading time-accurate data
+	'''return True #remove when doing real-time'''
+	dTime = dt.datetime.utcnow()
 	dTime = dTime.strftime("%H:%M:%S")
 	#print dTime
 	h1, m1 , s1 = map(float, vTime.split(':'))
@@ -91,7 +91,7 @@ def weatherTimeAccurate(vaisalaTime): #makes sure that the dome is reading time-
 	if abs((s1 + 60*(m1 + 60*h1))-(s2 + 60*(m2+ 60*h2)))>=5:
 		return False
 	else:
-		return True'''
+		return True
 	
 	
 def goodWeather(): #checks if weather meets good conditions
@@ -125,11 +125,11 @@ def positionAccurate(azimuth): #checks if dome position is accurate. If lagging 
 	print "\nChecking position..."
 	print "\nSun Position %s" %(57.2958*float(azimuth))
 	print "\nDome Position %s" %(dome.az)
-	
 	if abs(57.2958*float(azimuth) - float(dome.az))>15: 
+		print 'Dome needs to be rotated!'
 		return False
 	else:
-		print 'Position is fine'
+		print 'Position is fine!'
 		return True
 
 		
@@ -143,9 +143,9 @@ def checkMovement(position): #tells dome to move to position 5 degrees ahead of 
 	else:
 		#print message
 		parseinfo(message)
-	while positionAccurate(str(position))==False and count <=5:
+	while positionAccurate(str(position))==False and count <=2:
 		move(57.2958*position + 5)
-		sleep(10)
+		sleep(20)
 		dome.write_command('GINF')
 		result,message = dome.readfrom()
 		if result == 0:
@@ -154,10 +154,13 @@ def checkMovement(position): #tells dome to move to position 5 degrees ahead of 
 			#print message
 			parseinfo(message)
 		count +=1
-		if count == 5:
-			print 'dome didnt listen'
-			
-	
+		if count == 2:
+			print 'Dome didnt listen! Closing....'
+			dome.write_command('GOPN')
+			dome.write_command('GCLS') #close the dome if it's not listening
+			sleep(30)
+
+
 def automate(): #main function for automation
 	#initialize ephemeris 
 	pos = ephem.city("Toronto")#need to enter exact coordinates
@@ -169,14 +172,18 @@ def automate(): #main function for automation
 		if dome.shutter == 'Unknown': #send dome to starting position if shutter is unknown
 			dome.write_command('GHOM')
 			sleep(30)
+			dome.write_command('GOPN')
 			dome.write_command('GCLS')
 			sleep(30)
-		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0: #send Dome to sun position if weather permits and daytime
+		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0.1: #send Dome to sun position if weather permits and daytime
 			dome.write_command('GHOM')
+			print '\n Sun is out! Going to home position ....\n'
 			sleep(30)
 			dome.write_command("GOPN")
+			print '\n Openning the dome shutter ....\n'
 			sleep(30) 
-			move(57.2958*float(sun.az) + 5)
+			print '\n Moving the dome to the right position ....\n'
+			move(57.2958*float(sun.az)+5)
 			sleep(30)
 		
 		while True: #looping program
@@ -190,11 +197,12 @@ def automate(): #main function for automation
 			else:
 				print '\t Contact Failed.  Dome status unknown.'
 			if dome.shutter == 'Opened':
-				if sun.alt <0: #closing for night time
+				if sun.alt <0.1: #closing for night time
+					print "\nClosing for the night!"
 					dome.write_command('GHOM')
 					sleep(30)
 					dome.write_command('GCLS')
-					for i in range(60):
+					for i in range(600):
 						sleep(1)
 					print "\nNight time -- Dome closed"
 				elif goodWeather() == False: #closing for bad weather
@@ -204,21 +212,22 @@ def automate(): #main function for automation
 					sleep(60)
 					print "\nPoor weather conditions detected -- Dome closed"
 				elif positionAccurate(sun.az) == False and goodWeather()==True: 
+					print "\n Sun position and dome position don't match. Checking... \n"
 					checkMovement(float(sun.az)) #move to track sun
 				for i in range(10): #wait 10 seconds
 					sleep(1) #enables keyboardinterrupt to be processed right away
 				
 			else:
-				if goodWeather() == True  and sun.alt>0: #opens dome again if conditions allow it
+				if goodWeather() == True  and sun.alt>0.1: #opens dome again if conditions allow it
 					dome.write_command('GHOM')
 					sleep(30)
 					dome.write_command("GOPN")
 					for i in range(30):
 						sleep(1)
-					move(57.2958*float(sun.az) + 5)
+					move(57.2958*float(sun.az)+5)
 					sleep(30)
-				else: #waiting in bad conditions
-					for i in range(60):
+				else: #waiting in bad conditions 
+					for i in range(900): #check every 15 minutes again
 						sleep(1)
 			
 			
@@ -228,6 +237,7 @@ def automate(): #main function for automation
 		print "\nKeyboardInterrupt -- exiting automation"
 		return
 
+#for writing the logs into a file daily
 class Tee(object):
     def __init__(self, *files):
         self.files = files
@@ -239,15 +249,18 @@ class Tee(object):
         for f in self.files:
             f.flush()
 
-f = open('out.txt', 'w')
-original = sys.stdout
-sys.stdout = Tee(sys.stdout, f)
+out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/robo_log/' #output directory for the log file
+base_name = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "robo_log") #log file to change name daily
+f = open(base_name + ".txt", mode="a")
+#f = open('out.txt', 'w')
+original = sys.stdout 
+sys.stdout = Tee(sys.stdout, f) #saving all the printed messages onto the file
 
 if __name__ == '__main__': #written by Jonathan Franklin
 
 	dome = Dome()
 	leave_loop = False
-	print '\n\nrobodomev1.py\n----'
+	print '\n\nrobodome_automation.py\n----'
 
     ## Clear Serial Line
 	dome.tty.read(dome.tty.inWaiting())
@@ -265,7 +278,7 @@ if __name__ == '__main__': #written by Jonathan Franklin
     ## Loop until user quits.
 	while not leave_loop:
 		try:
-			command = raw_input('\nWhat next? (q to quit): ')
+			command = raw_input('\nWhat next? (a:automation, GHOM:Home, GCLS: Close, GOPN: Open, GXXX: Go to specefied angle, GINF: status, q:quit): ')
 			if  command in ['q','Q']:
 				leave_loop = True
 			elif command in ['a','A']: #enables automation
@@ -291,4 +304,4 @@ if __name__ == '__main__': #written by Jonathan Franklin
 			raise
 	sys.exit()
 
-f.close()
+f.close() #closes the log file
