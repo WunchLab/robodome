@@ -3,7 +3,7 @@ from time import sleep
 import serial
 import datetime as dt
 import ephem
-
+import csv
 
 class Dome: #Class written by Jonathan Franklin
     '''This is the virtual representation of the robodome,
@@ -125,6 +125,7 @@ def positionAccurate(azimuth): #checks if dome position is accurate. If lagging 
 	print "\nChecking position..."
 	print "\nSun Position %s" %(57.2958*float(azimuth))
 	print "\nDome Position %s" %(dome.az)
+	
 	if abs(57.2958*float(azimuth) - float(dome.az))>15: 
 		print 'Dome needs to be rotated!'
 		return False
@@ -145,7 +146,7 @@ def checkMovement(position): #tells dome to move to position 5 degrees ahead of 
 		parseinfo(message)
 	while positionAccurate(str(position))==False and count <=2:
 		move(57.2958*position + 5)
-		sleep(20)
+		sleep(10)
 		dome.write_command('GINF')
 		result,message = dome.readfrom()
 		if result == 0:
@@ -156,14 +157,17 @@ def checkMovement(position): #tells dome to move to position 5 degrees ahead of 
 		count +=1
 		if count == 2:
 			print 'Dome didnt listen! Closing....'
-			dome.write_command('GOPN')
 			dome.write_command('GCLS') #close the dome if it's not listening
+			sleep(30)
+			dome.write_command('GOPN') 
 			sleep(30)
 
 
 def automate(): #main function for automation
 	#initialize ephemeris 
-	pos = ephem.city("Toronto")#need to enter exact coordinates
+	#pos = ephem.city("Toronto")#need to enter exact coordinates
+	pos=ephem.Observer()
+	pos.lon, pos.lat= '-79.39', '43.66'
 	sun = ephem.Sun()
 
 	try:
@@ -172,10 +176,9 @@ def automate(): #main function for automation
 		if dome.shutter == 'Unknown': #send dome to starting position if shutter is unknown
 			dome.write_command('GHOM')
 			sleep(30)
-			dome.write_command('GOPN')
 			dome.write_command('GCLS')
 			sleep(30)
-		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0.1: #send Dome to sun position if weather permits and daytime
+		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0: #send Dome to sun position if weather permits and daytime
 			dome.write_command('GHOM')
 			print '\n Sun is out! Going to home position ....\n'
 			sleep(30)
@@ -183,7 +186,7 @@ def automate(): #main function for automation
 			print '\n Openning the dome shutter ....\n'
 			sleep(30) 
 			print '\n Moving the dome to the right position ....\n'
-			move(57.2958*float(sun.az)+5)
+			move(57.2958*float(sun.az) + 5)
 			sleep(30)
 		
 		while True: #looping program
@@ -197,8 +200,7 @@ def automate(): #main function for automation
 			else:
 				print '\t Contact Failed.  Dome status unknown.'
 			if dome.shutter == 'Opened':
-				if sun.alt <0.1: #closing for night time
-					print "\nClosing for the night!"
+				if sun.alt <0: #closing for night time
 					dome.write_command('GHOM')
 					sleep(30)
 					dome.write_command('GCLS')
@@ -218,16 +220,16 @@ def automate(): #main function for automation
 					sleep(1) #enables keyboardinterrupt to be processed right away
 				
 			else:
-				if goodWeather() == True  and sun.alt>0.1: #opens dome again if conditions allow it
+				if goodWeather() == True  and sun.alt>0: #opens dome again if conditions allow it
 					dome.write_command('GHOM')
 					sleep(30)
 					dome.write_command("GOPN")
 					for i in range(30):
 						sleep(1)
-					move(57.2958*float(sun.az)+5)
+					move(57.2958*float(sun.az) + 5)
 					sleep(30)
-				else: #waiting in bad conditions 
-					for i in range(900): #check every 15 minutes again
+				else: #waiting in bad conditions
+					for i in range(60):
 						sleep(1)
 			
 			
@@ -249,22 +251,32 @@ class Tee(object):
         for f in self.files:
             f.flush()
 
-out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/robo_log/' #output directory for the log file
-base_name = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "robo_log") #log file to change name daily
-f = open(base_name + ".txt", mode="a")
-#f = open('out.txt', 'w')
-original = sys.stdout 
-sys.stdout = Tee(sys.stdout, f) #saving all the printed messages onto the file
+
+
+#stat_out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/status/' #output directory for the log file
+##status_file = (stat_out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "status" + ".txt") #log file to change name daily
+
+
+
 
 if __name__ == '__main__': #written by Jonathan Franklin
 
+	out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/robo_log/' #output directory for the log file
+	base_name = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "robo_log") #log file to change name daily
+	f = open(base_name + ".txt", mode="a")
+	#f = open('out.txt', 'w')
+	original = sys.stdout
+	sys.stdout = Tee(sys.stdout, f) #saving all the printed messages onto the file
+
+
+	day=dt.date.today().strftime("%Y%m%d")
 	dome = Dome()
 	leave_loop = False
 	print '\n\nrobodome_automation.py\n----'
 
     ## Clear Serial Line
 	dome.tty.read(dome.tty.inWaiting())
-    
+
 	## Do an inital check of the dome status.
 	dome.write_command('GINF')
 	result,message = dome.readfrom()
@@ -273,8 +285,6 @@ if __name__ == '__main__': #written by Jonathan Franklin
 		parseinfo(message)
 	else:
 		print '\tInitial Contact Failed.  Dome status unknown.'
-
-
     ## Loop until user quits.
 	while not leave_loop:
 		try:
@@ -302,6 +312,7 @@ if __name__ == '__main__': #written by Jonathan Franklin
 				parseinfo(message)
 		except:
 			raise
+
 	sys.exit()
 
-f.close() #closes the log file
+	f.close() #closes the log file
