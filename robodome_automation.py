@@ -111,7 +111,7 @@ def goodWeather(): #checks if weather meets good conditions
 	elif float(lineArr[3]) >=10: #arr[3]=wsavg, ?=wsmax, 5=RH, 8=rainintensity 
 		print "\nAverage windspeed too high"
 		return False
-	elif float(lineArr[5]) >=70:
+	elif float(lineArr[5]) >=80:
 		print "\nMax humidity too high"
 		return False
 	elif float(lineArr[8]) >0:
@@ -121,12 +121,12 @@ def goodWeather(): #checks if weather meets good conditions
 		print 'Weather is fine'
 		return True
 
-def positionAccurate(azimuth): #checks if dome position is accurate. If lagging by 15 degrees or more, return False
+def positionAccurate(azimuth): #checks if dome position is accurate. If lagging by 40 degrees or more, return False
 	print "\nChecking position..."
 	print "\nSun Position %s" %(57.2958*float(azimuth))
 	print "\nDome Position %s" %(dome.az)
 	
-	if abs(57.2958*float(azimuth) - float(dome.az))>15: 
+	if abs(57.2958*float(azimuth) - float(dome.az))>20: 
 		print 'Dome needs to be rotated!'
 		return False
 	else:
@@ -144,9 +144,9 @@ def checkMovement(position): #tells dome to move to position 5 degrees ahead of 
 	else:
 		#print message
 		parseinfo(message)
-	while positionAccurate(str(position))==False and count <=2:
-		move(57.2958*position + 5)
-		sleep(10)
+	while positionAccurate(str(position))==False and count <=3:
+		move(57.2958*position + 10)
+		sleep(20)
 		dome.write_command('GINF')
 		result,message = dome.readfrom()
 		if result == 0:
@@ -155,10 +155,11 @@ def checkMovement(position): #tells dome to move to position 5 degrees ahead of 
 			#print message
 			parseinfo(message)
 		count +=1
-		if count == 2:
+		if count == 3:
 			print 'Dome didnt listen! Closing....'
-			dome.write_command('GCLS') #close the dome if it's not listening
-			sleep(30)
+			dome.write_command('GHOM') #go to home and close the dome if it's not listening
+			dome.write_command('GCLS') 
+			sleep(120)
 			dome.write_command('GOPN') 
 			sleep(30)
 
@@ -178,7 +179,7 @@ def automate(): #main function for automation
 			sleep(30)
 			dome.write_command('GCLS')
 			sleep(30)
-		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0: #send Dome to sun position if weather permits and daytime
+		if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0.15: #send Dome to sun position if weather permits and daytime
 			dome.write_command('GHOM')
 			print '\n Sun is out! Going to home position ....\n'
 			sleep(30)
@@ -186,7 +187,7 @@ def automate(): #main function for automation
 			print '\n Openning the dome shutter ....\n'
 			sleep(30) 
 			print '\n Moving the dome to the right position ....\n'
-			move(57.2958*float(sun.az) + 5)
+			move(57.2958*float(sun.az) + 10)
 			sleep(30)
 		
 		while True: #looping program
@@ -200,11 +201,11 @@ def automate(): #main function for automation
 			else:
 				print '\t Contact Failed.  Dome status unknown.'
 			if dome.shutter == 'Opened':
-				if sun.alt <0: #closing for night time
+				if sun.alt <0.15: #closing for night time
 					dome.write_command('GHOM')
 					sleep(30)
 					dome.write_command('GCLS')
-					for i in range(600):
+					for i in range(60):
 						sleep(1)
 					print "\nNight time -- Dome closed"
 				elif goodWeather() == False: #closing for bad weather
@@ -220,13 +221,13 @@ def automate(): #main function for automation
 					sleep(1) #enables keyboardinterrupt to be processed right away
 				
 			else:
-				if goodWeather() == True  and sun.alt>0: #opens dome again if conditions allow it
+				if goodWeather() == True  and sun.alt>0.15: #opens dome again if conditions allow it
 					dome.write_command('GHOM')
 					sleep(30)
 					dome.write_command("GOPN")
 					for i in range(30):
 						sleep(1)
-					move(57.2958*float(sun.az) + 5)
+					move(57.2958*float(sun.az) + 10)
 					sleep(30)
 				else: #waiting in bad conditions
 					for i in range(60):
@@ -256,17 +257,17 @@ class Tee(object):
 #stat_out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/status/' #output directory for the log file
 ##status_file = (stat_out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "status" + ".txt") #log file to change name daily
 
+out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/robo_log/' #output directory for the log file
+base_name = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "robo_log") #log file to change name daily
+f = open(base_name + ".txt", mode="a")
+#f = open('out.txt', 'w')
+original = sys.stdout
+sys.stdout = Tee(sys.stdout, f) #saving all the printed messages onto the file
+
 
 
 
 if __name__ == '__main__': #written by Jonathan Franklin
-
-	out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/robodome/robo_log/' #output directory for the log file
-	base_name = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" + "robo_log") #log file to change name daily
-	f = open(base_name + ".txt", mode="a")
-	#f = open('out.txt', 'w')
-	original = sys.stdout
-	sys.stdout = Tee(sys.stdout, f) #saving all the printed messages onto the file
 
 
 	day=dt.date.today().strftime("%Y%m%d")
@@ -315,4 +316,4 @@ if __name__ == '__main__': #written by Jonathan Franklin
 
 	sys.exit()
 
-	f.close() #closes the log file
+f.close() #closes the log file
