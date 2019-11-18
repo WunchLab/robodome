@@ -4,13 +4,15 @@ import serial
 import datetime as dt
 import ephem
 import csv
+import glob
+import os
 
 class Dome: #Class written by Jonathan Franklin
     '''This is the virtual representation of the robodome,
     connecting the python program to the electronics.'''
 
     def __init__(self):
-        self.tty=serial.Serial('COM33', 9600, timeout=2) #CHANGE COM3 to serial port being used
+        self.tty=serial.Serial('COM34', 9600, timeout=2) #CHANGE COM3 to serial port being used
         self.shutter = 'Unknown'
         self.az = 'Unknown'
 
@@ -96,8 +98,10 @@ def weatherTimeAccurate(vTime): #makes sure that the dome is reading time-accura
 	
 def goodWeather(): #checks if weather meets good conditions
 	print "\nChecking weather..."
-	out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/75_met//'
-	vaisala_file = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" +"75_sus"+ ".txt")
+	'''out_dir = 'C:/Users/Administrator/Desktop/em-27_aux_scripts/75_met//'''
+	out_dir = list_of_files = glob.glob('C:/Users/Administrator/Desktop/em-27_aux_scripts/75_met//*.txt')
+	vaisala_file =  max(list_of_files, key=os.path.getctime)      # * use latest file available
+	'''vaisala_file = (out_dir + dt.date.today().strftime("%Y%m%d") + "_" +"75_sus"+ ".txt")'''
 	file = open(vaisala_file, "r")
 	line_list = file.readlines()
 	last_line = line_list[-1]
