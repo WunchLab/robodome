@@ -143,12 +143,12 @@ def goodWeather(): #checks if weather meets good conditions
 
 #-------------------------------------------------------------------------------------------
 
-def positionAccurate(azimuth): #checks if dome position is accurate. If lagging by 40 degrees or more, return False
+def positionAccurate(azimuth): #checks if dome position is accurate. If lagging by 15 degrees or more, return False
 	print("\nChecking position...")
 	print("\nSun Position %s" %(57.2958*float(azimuth)) )
 	print("\nDome Position %s" %(dome.az) )
 	
-	if abs((57.2958*float(azimuth)) - float(dome.az))>20: 
+	if abs((57.2958*float(azimuth)) - float(dome.az))>15: #updated to 15 degrees because of shadows
 		print('Dome needs to be rotated!')
 		return False
 	else:
@@ -206,7 +206,7 @@ def automate(): #main function for automation#initialize
             dome.write_command('GCLS')
             sleep(30)
 
-        if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0.15: #send Dome to sun position if weather permits and daytime
+        if goodWeather() == True and dome.shutter == 'Closed' and sun.alt>0.05: #send Dome to sun position if weather permits and daytime
             dome.write_command('GHOM')
             print('\n Sun is out! Going to home position ....\n')
             sleep(30)
@@ -248,7 +248,7 @@ def automate(): #main function for automation#initialize
                     sleep(1) #enables keyboardinterrupt to be processed right away
 				
             else:
-                if goodWeather() == True  and sun.alt>0.15: #opens dome again if conditions allow it
+                if goodWeather() == True  and sun.alt>0.05: #opens dome again if conditions allow it
                     dome.write_command('GHOM')
                     sleep(30)
                     dome.write_command("GOPN")
